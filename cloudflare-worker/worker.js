@@ -119,8 +119,105 @@ const cookieString = allCookies.join('; ');
 
     const data = await searchResponse.json();
 
-    // STEP 3: Return data with CORS headers
-    return new Response(JSON.stringify(data), {
+const enrichedProducts = [];
+    
+    if (searchData.html) {
+      // Parse HTML to extract product URLs
+      const productUrlRegex = /href="\/pharmacy\/([\w-]+)"/g;
+      const matches = [...searchData.html.matchAll(productUrlRegex)];
+      
+      // Process up to 10 products (to avoid timeout)
+      const maxProducts = Math.min(matches.length, 10);
+      
+      for (let i = 0; i < maxProducts; i++) {
+        const productSlug = matches[i][1];
+        const productUrl = `https://sofia.vmclub.bg/pharmacy/${productSlug}`;
+        
+        try {
+          // Fetch product page
+          const productPage = await fetch(productUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Cookie': cookieString
+            }
+          });
+          
+          const productHtml = await productPage.text();
+          
+          // Extract JSON-LD data
+          const jsonLdMatch = productHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+          
+          if (jsonLdMatch) {
+            const jsonLd = JSON.parse(jsonLdMatch[1]);
+            const productID = jsonLd.productID;
+            
+            // Fetch store availability
+            const availabilityUrl = `https://sofia.vmclub.bg/store-locations?check=${productID}`;
+            const availabilityResponse = await fetch(availabilityUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Cookie': cookieString
+              }
+            });
+            
+            const availabilityHtml = await availabilityResponse.text();
+            
+            // Parse availability HTML to extract locations
+            const locationRegex = /data-text='({[^']+})'/g;
+            const locations = [];
+            let locationMatch;
+            
+            while ((locationMatch = locationRegex.exec(availabilityHtml)) !== null) {
+              try {
+                const locationData = JSON.parse(locationMatch[1].replace(/\\/g, ''));
+                locations.push({
+                  id: locationData.id,
+                  name: locationData.name,
+                  address: locationData.address,
+                  city: locationData.city,
+                  email: locationData.email,
+                  phone: locationData.phone,
+                  lat: locationData.lat,
+                  lon: locationData.lon,
+                  status: locationData.status // 0=available, 1=unavailable
+                });
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+            
+            // Add enriched product
+            enrichedProducts.push({
+              productID: productID,
+              name: jsonLd.name,
+              description: jsonLd.description,
+              image: jsonLd.image?.[0] || null,
+              sku: jsonLd.sku,
+              brand: jsonLd.brand?.name || '',
+              price: jsonLd.offers?.price || null,
+              priceCurrency: jsonLd.offers?.priceCurrency || 'EUR',
+              availability: jsonLd.offers?.availability || '',
+              productUrl: productUrl,
+              slug: productSlug,
+              locations: locations
+            });
+          }
+          
+        } catch (err) {
+          console.error(`Failed to fetch product ${productSlug}:`, err.message);
+          // Continue with other products
+        }
+      }
+    }
+
+    // Return enriched data
+    return new Response(JSON.stringify({
+      success: true,
+      query: query,
+      totalProducts: enrichedProducts.length,
+      products: enrichedProducts
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 

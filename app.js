@@ -454,57 +454,77 @@ async function searchVMClub(query) {
 function parseVMClubResponse(data, query) {
     const results = [];
     
-    // VMClub returns HTML in data.html or array of products
-    // Adjust based on actual response format
-    if (!data || (!data.html && !data.products)) {
+    if (!data || !data.products || !Array.isArray(data.products)) {
+        console.warn('No products found in VMClub response');
         return results;
     }
     
-    // If data has HTML, parse it
-    if (data.html) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(data.html, 'text/html');
+    // Process each product with its locations
+    data.products.forEach(product => {
+        const baseProduct = {
+            name: product.name,
+            manufacturer: product.brand || 'VMClub',
+            packaging: product.description || '',
+            prescription: false,
+            imageUrl: product.image || null,
+            productLink: product.productUrl,
+            productID: product.productID,
+            sku: product.sku
+        };
         
-        const productItems = doc.querySelectorAll('.product-item, .search-result-item, [data-product-id]');
+        const price = product.price ? parseFloat(product.price) : null;
+        const priceFormatted = price ? `${price.toFixed(2)} ${product.priceCurrency || 'EUR'}` : 'Няма цена';
         
-        productItems.forEach(item => {
-            const nameElement = item.querySelector('.product-name, h3, h4, .name');
-            const priceElement = item.querySelector('.price, .product-price');
-            const linkElement = item.querySelector('a[href*="/product/"], a[href*="/products/"]');
-            const imgElement = item.querySelector('img');
-            
-            if (nameElement) {
-                const name = nameElement.textContent.trim();
-                const priceText = priceElement ? priceElement.textContent.trim() : null;
-                const price = priceText ? parseFloat(priceText.replace(/[^0-9.]/g, '')) : null;
-                const link = linkElement ? linkElement.getAttribute('href') : null;
-                const imageUrl = imgElement ? imgElement.getAttribute('src') : null;
+        // If product has locations, create a result for each available location
+        if (product.locations && product.locations.length > 0) {
+            product.locations.forEach(location => {
+                // status: 0 = available, 1 = unavailable
+                const inStock = location.status === 0;
                 
                 results.push({
                     medicine: {
-                        name: name,
-                        manufacturer: 'VMClub',
-                        packaging: '',
-                        prescription: false,
-                        imageUrl: imageUrl ? (imageUrl.startsWith('http') ? imageUrl : `https://sofia.vmclub.bg${imageUrl}`) : null,
-                        productLink: link ? (link.startsWith('http') ? link : `https://sofia.vmclub.bg${link}`) : null
+                        ...baseProduct
                     },
                     pharmacy: {
-                        name: 'VMClub София',
-                        address: 'Различни локации в София',
-                        phone: '0700 20 888',
-                        workingHours: 'Виж сайта за работно време',
-                        city: 'София'
+                        name: `VMClub ${location.name}`,
+                        address: location.address,
+                        phone: location.phone,
+                        email: location.email,
+                        city: location.city,
+                        workingHours: 'Виж сайта',
+                        coordinates: {
+                            lat: parseFloat(location.lat),
+                            lng: parseFloat(location.lon)
+                        }
                     },
-                    inStock: true,
-                    quantity: 5,
-                    price: price ? price.toFixed(2) : 'Няма цена',
-                    availability: 'available',
-                    statusText: 'Наличен в София'
+                    inStock: inStock,
+                    quantity: inStock ? 5 : 0,
+                    price: priceFormatted,
+                    availability: inStock ? 'available' : 'unavailable',
+                    statusText: inStock ? `Наличен в ${location.city}` : `Неналичен в ${location.city}`
                 });
-            }
-        });
-    }
+            });
+        } else {
+            // No locations found - add generic entry
+            results.push({
+                medicine: {
+                    ...baseProduct
+                },
+                pharmacy: {
+                    name: 'VMClub София',
+                    address: 'Различни локации',
+                    phone: '0700 20 888',
+                    workingHours: 'Виж сайта',
+                    city: 'София'
+                },
+                inStock: false,
+                quantity: 0,
+                price: priceFormatted,
+                availability: 'unknown',
+                statusText: 'Проверете наличността'
+            });
+        }
+    });
     
     return results;
 }
