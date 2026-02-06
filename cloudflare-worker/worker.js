@@ -119,27 +119,27 @@ async function handleVMClub(query, corsHeaders) {
     });
 
     const data = await searchResponse.json();
-    console.log('VMClub search response:', { hasHtml: !!data.html, htmlLength: data.html?.length });
+    console.log('VMClub search response:', JSON.stringify(data).substring(0, 500));
+    console.log('VMClub response keys:', Object.keys(data));
 
     const enrichedProducts = [];
     
-    // STEP 3: Extract product URLs from search results and enrich with details
-    if (data.html) {
-      // Parse HTML to extract product URLs (e.g., "/pharmacy/driptan-tabl-5mg-h-60br")
-      const productUrlRegex = /href="\/pharmacy\/([\w-]+)"/g;
-      const matches = [...data.html.matchAll(productUrlRegex)];
-      console.log(`VMClub found ${matches.length} product URLs`);
+    // STEP 3: Process items from search results
+    if (data.items && Array.isArray(data.items)) {
+      console.log(`VMClub found ${data.items.length} products`);
       
       // Process up to 10 products (to avoid timeout)
-      const maxProducts = Math.min(matches.length, 10);
+      const maxProducts = Math.min(data.items.length, 10);
       
       for (let i = 0; i < maxProducts; i++) {
-        const productSlug = matches[i][1];
+        const item = data.items[i];
+        const productSlug = item.url;
+        const productID = item.id;
         const productUrl = `https://sofia.vmclub.bg/pharmacy/${productSlug}`;
-        console.log(`Processing product ${i+1}/${maxProducts}: ${productSlug}`);
+        console.log(`Processing product ${i+1}/${maxProducts}: ${productSlug} (ID: ${productID})`);
         
         try {
-          // STEP 3.1: Fetch product page to get JSON-LD data
+          // STEP 3.1: Fetch product page to get JSON-LD data (for name, brand, description, image)
           const productPage = await fetch(productUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -150,14 +150,16 @@ async function handleVMClub(query, corsHeaders) {
           
           const productHtml = await productPage.text();
           
-          // STEP 3.2: Extract JSON-LD data (contains productID, price, brand, etc.)
+          // STEP 3.2: Extract JSON-LD data (contains name, price, brand, description, image)
           const jsonLdMatch = productHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
           
           if (jsonLdMatch) {
-            const jsonLd = JSON.parse(jsonLdMatch[1]);
-            const productID = jsonLd.productID;
+            const jsonLdText = jsonLdMatch[1];
+            console.log('JSON-LD raw text sample:', jsonLdText.substring(0, 200));
+            const jsonLd = JSON.parse(jsonLdText);
+            console.log('JSON-LD parsed name:', jsonLd.name);
             
-            // STEP 3.3: Fetch store availability using productID
+            // STEP 3.3: Fetch store availability using productID from search results
             const availabilityUrl = `https://sofia.vmclub.bg/store-locations?check=${productID}`;
             const availabilityResponse = await fetch(availabilityUrl, {
               headers: {
@@ -200,8 +202,8 @@ async function handleVMClub(query, corsHeaders) {
               image: jsonLd.image?.[0] || null,
               sku: jsonLd.sku,
               brand: jsonLd.brand?.name || '',
-              price: jsonLd.offers?.price || null,
-              priceCurrency: jsonLd.offers?.priceCurrency || 'EUR',
+              price: jsonLd.offers?.price || item.price || null,
+              priceCurrency: jsonLd.offers?.priceCurrency || item.currency || 'EUR',
               availability: jsonLd.offers?.availability || '',
               productUrl: productUrl,
               slug: productSlug,

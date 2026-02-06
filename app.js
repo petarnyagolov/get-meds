@@ -446,6 +446,7 @@ async function searchVMClub(query) {
         
         const data = await response.json();
         console.log('🔵 VMClub data received:', data);
+        console.log('🔵 VMClub first product name:', data.products?.[0]?.name);
         
         // Parse VMClub response
         return parseVMClubResponse(data, query);
@@ -458,6 +459,7 @@ async function searchVMClub(query) {
 
 // Parse VMClub response into standard format
 function parseVMClubResponse(data, query) {
+    console.log('🔵 Parsing VMClub response, products count:', data.products?.length);
     const results = [];
     
     if (!data || !data.products || !Array.isArray(data.products)) {
@@ -466,7 +468,8 @@ function parseVMClubResponse(data, query) {
     }
     
     // Process each product with its locations
-    data.products.forEach(product => {
+    data.products.forEach((product, idx) => {
+        console.log(`🔵 Product ${idx}: name="${product.name}"`);
         const baseProduct = {
             name: product.name,
             manufacturer: product.brand || 'VMClub',
@@ -721,6 +724,8 @@ function updateResultsCount(filtered, total) {
 // Create a pharmacy card HTML
 function createPharmacyCard(result) {
     const { medicine, pharmacy, inStock, quantity, price, availability, statusText } = result;
+    
+    console.log('Creating card for medicine:', medicine.name, 'Type:', typeof medicine.name);
     
     const availabilityLabels = {
         available: 'Налично',
