@@ -69,16 +69,27 @@ async function handleVMClub(query, corsHeaders) {
 
     // STEP 1: Get fresh session from homepage
     const homePage = await fetch("https://sofia.vmclub.bg/", {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'bg,en;q=0.9',
-      }
-    });
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'bg-BG,bg;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none'
+  }
+});
 
     const html = await homePage.text();
-    const cookies = homePage.headers.get("set-cookie");
-
+const setCookieHeaders = homePage.headers.get("set-cookie");
+let allCookies = [];
+if (setCookieHeaders) {
+  const cookieParts = setCookieHeaders.split(',').map(c => c.trim());
+  allCookies = cookieParts.map(cookie => cookie.split(';')[0]).filter(c => c);
+}
+const cookieString = allCookies.join('; ');
     // Extract CSRF token from HTML
     const csrfToken = html.match(/name="csrf-token" content="([^"]+)"/)?.[1];
 
@@ -88,18 +99,23 @@ async function handleVMClub(query, corsHeaders) {
 
     // STEP 2: Make search request with CSRF token
     const searchResponse = await fetch("https://sofia.vmclub.bg/products/fast-search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "X-CSRF-TOKEN": csrfToken,
-        "X-Requested-With": "XMLHttpRequest",
-        "Cookie": cookies,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Referer": "https://sofia.vmclub.bg/"
-      },
-      body: `q=${encodeURIComponent(query)}&field=fast-search`
-    });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "X-CSRF-TOKEN": csrfToken,
+    "X-Requested-With": "XMLHttpRequest",
+    "Cookie": cookieString,  // Използвай новия cookieString
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "Accept-Language": "bg-BG,bg;q=0.9,en;q=0.8",
+    "Origin": "https://sofia.vmclub.bg",
+    "Referer": "https://sofia.vmclub.bg/",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin"
+  },
+  body: `q=${encodeURIComponent(query)}&field=fast-search`
+});
 
     const data = await searchResponse.json();
 
