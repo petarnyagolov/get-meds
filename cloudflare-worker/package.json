@@ -1,0 +1,8 @@
+{
+  "name": "get-meds-cors-proxy",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for CORS proxy for GetMeds app",
+  "main": "worker.js",
+  "author": "GetMeds",
+  "license": "MIT"
+}
