@@ -59,8 +59,10 @@ async function handleRequest(request) {
     const targetRequest = new Request(targetUrl, {
       method: request.method,
       headers: {
-        'User-Agent': 'GetMeds/1.0',
-        'Accept': 'application/json, text/html',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'bg,en;q=0.9',
+        'Referer': 'https://sopharmacy.bg/'
       }
     })
 
@@ -75,10 +77,18 @@ async function handleRequest(request) {
       modifiedResponse.headers.set(key, value)
     }
     
-    // Copy other important headers
+    // Copy content-type header
     if (response.headers.get('content-type')) {
       modifiedResponse.headers.set('content-type', response.headers.get('content-type'))
     }
+    
+    // Copy other important headers
+    const importantHeaders = ['content-length', 'cache-control', 'etag', 'last-modified']
+    importantHeaders.forEach(header => {
+      if (response.headers.get(header)) {
+        modifiedResponse.headers.set(header, response.headers.get(header))
+      }
+    })
 
     return modifiedResponse
     

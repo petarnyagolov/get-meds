@@ -218,6 +218,31 @@ main {
     padding: 15px;
     background: white;
     border-radius: 8px;
+    display: flex;
+    gap: 15px;
+}
+
+.product-image {
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.product-image img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.medicine-content {
+    flex: 1;
+    min-width: 0;
 }
 
 .medicine-name {
@@ -225,6 +250,36 @@ main {
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 8px;
+}
+
+.product-link {
+    display: inline-block;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+    transition: color 0.2s ease;
+}
+
+.product-link:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+.stock-info {
+    font-weight: 600;
+}
+
+.stock-info.available {
+    color: #065f46;
+}
+
+.stock-info.limited {
+    color: #92400e;
+}
+
+.stock-info.unavailable {
+    color: #991b1b;
 }
 
 .medicine-details {
@@ -259,6 +314,15 @@ main {
 
 .pharmacy-location strong {
     color: var(--text-primary);
+}
+
+.pharmacy-location a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.pharmacy-location a:hover {
+    text-decoration: underline;
 }
 
 .no-results {
@@ -302,5 +366,14 @@ footer p {
     .pharmacy-header {
         flex-direction: column;
         gap: 10px;
+    }
+    
+    .medicine-info {
+        flex-direction: column;
+    }
+    
+    .product-image {
+        width: 100%;
+        height: 150px;
     }
 }
