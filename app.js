@@ -169,20 +169,32 @@ async function searchSopharmacy(query) {
         const productIds = extractSopharmacyProductIds(html);
         
         if (productIds.length === 0) {
+            console.warn('No products found in search results');
             return [];
         }
         
+        console.log(`Found ${productIds.length} products, fetching og:images for first 3...`);
+        
         // Step 3: Enhance product info with og:image (parallel fetch for first 3 products)
         const enhancedProductsPromises = productIds.slice(0, 3).map(async productInfo => {
-            // Always try to get og:image from product page for better quality
-            const ogImage = await extractProductImage(productInfo.id);
-            return {
-                ...productInfo,
-                imageUrl: ogImage || productInfo.imageUrl // Prioritize og:image
-            };
+            console.log(`→ Fetching og:image for product ${productInfo.id}...`);
+            try {
+                // Always try to get og:image from product page for better quality
+                const ogImage = await extractProductImage(productInfo.id);
+                return {
+                    ...productInfo,
+                    imageUrl: ogImage || productInfo.imageUrl // Prioritize og:image
+                };
+            } catch (error) {
+                console.error(`Failed to fetch og:image for product ${productInfo.id}:`, error);
+                return productInfo; // Return original if failed
+            }
         });
         
-        const enhancedProducts = await Promise.all(enhancedProductsPromises);
+        const enhancedProductsResults = await Promise.allSettled(enhancedProductsPromises);
+        const enhancedProducts = enhancedProductsResults
+            .filter(r => r.status === 'fulfilled')
+            .map(r => r.value);
         
         // Step 4: Get availability for each enhanced product
         const availabilityPromises = enhancedProducts.map(productInfo => 
