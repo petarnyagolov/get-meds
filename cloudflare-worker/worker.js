@@ -38,7 +38,8 @@ async function handleRequest(request) {
     'sopharmacy.bg',
     'remedium.bg',
     'subra.bg',
-    'apteka.bg'
+    'apteka.bg',
+    'vmclub.bg'
   ]
 
   const targetDomain = new URL(targetUrl).hostname

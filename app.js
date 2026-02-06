@@ -14,6 +14,11 @@ const CONFIG = {
             name: 'Remedium',
             endpoint: 'https://remedium.bg/api/search',
             enabled: false
+        },
+        {
+            name: 'VMClub',
+            endpoint: 'https://vmclub.bg/api/products',
+            enabled: false // CORS enabled - requires Cloudflare Worker proxy
         }
     ]
 };

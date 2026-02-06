@@ -9,6 +9,31 @@
 
 ## Deployment Стъпки
 
+### Защо Wrangler CLI?
+
+**Wrangler** е официалният Cloudflare CLI инструмент за deploy на Workers.
+
+**Плюсове:**
+- ✅ Официален инструмент от Cloudflare
+- ✅ Автоматизиран deploy процес (една команда)
+- ✅ Локално тестване с `wrangler dev`
+- ✅ Real-time logs с `wrangler tail`
+- ✅ Управление на версии и rollback
+
+**Минуси:**
+- ❌ Изисква Node.js и npm инсталация
+- ❌ Допълнителна dependency в development environment
+
+**Алтернативи без Wrangler:**
+1. **Cloudflare Dashboard** - Ръчно copy/paste на кода в web интерфейса
+   - Плюсове: Не изисква инсталация
+   - Минуси: Ръчен процес, трудно за поддръжка
+2. **Cloudflare API** - Директни HTTP заявки
+   - Плюсове: Скриптуеми deployments
+   - Минуси: По-сложно, изисква API token management
+
+**Препоръка:** Използвай Wrangler за production. За бързо тестване можеш да copy/paste кода в Cloudflare Dashboard (Settings → Workers → Quick Edit), но за дългосрочна поддръжка Wrangler е по-добрият избор.
+
 ### 1. Инсталирай Wrangler
 
 ```bash
@@ -65,6 +90,7 @@ curl "https://get-meds-cors-proxy.your-subdomain.workers.dev?url=https://example
 const allowedDomains = [
     'sopharmacy.bg',
     'remedium.bg',
+    'vmclub.bg',
     'your-new-domain.bg'  // добави тук
 ];
 ```

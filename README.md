@@ -122,6 +122,7 @@ const CONFIG = {
 - [ ] Sopharmacy
 - [ ] Remedium
 - [ ] Аптека Субра
+- [ ] VMClub
 - [ ] Други аптечни вериги
 
 ## Roadmap

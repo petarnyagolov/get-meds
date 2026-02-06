@@ -194,6 +194,33 @@ wrangler deploy
 - **Има ли API?**: Да проверим
 - **Забележки**: Агрегатор на аптеки
 
+### VMClub
+
+- **Website**: https://vmclub.bg
+- **Има ли API?**: Да
+- **CORS**: Изисква proxy (Cloudflare Worker)
+- **Забележки**: Верига аптеки с API поддръжка
+
+**Примерна интеграция**:
+
+```javascript
+{
+    name: 'VMClub',
+    endpoint: 'https://vmclub.bg/api/products',
+    searchParam: 'q',
+    method: 'GET',
+    enabled: true
+}
+```
+
+**Пример за заявка през Cloudflare Worker**:
+```javascript
+getProducts(searchTerm) {
+  const workerUrl = `https://your-worker-name.workers.dev/?url=https://vmclub.bg/api/products&q=${searchTerm}`;
+  return fetch(workerUrl);
+}
+```
+
 ## API Response Examples
 
 ### Пример 1: JSON API
