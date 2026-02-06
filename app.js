@@ -259,6 +259,7 @@ async function extractProductImage(productId) {
         const response = await fetch(fetchUrl);
         
         if (!response.ok) {
+            console.warn(`Product page fetch failed (${response.status}) for product ${productId}`);
             return null;
         }
         
@@ -266,27 +267,41 @@ async function extractProductImage(productId) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         
-        // Try to extract og:image meta tag
+        // Priority 1: Try to extract og:image meta tag (best quality)
         const ogImageMeta = doc.querySelector('meta[property="og:image"]');
         if (ogImageMeta) {
             const imageUrl = ogImageMeta.getAttribute('content');
             if (imageUrl) {
-                // Make sure URL is absolute
+                console.log(`✓ Found og:image for product ${productId}: ${imageUrl}`);
                 return imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
             }
         }
         
-        // Fallback: try to find product image in page
-        const productImage = doc.querySelector('.product-image img, .product-detail__image img, .pdp-image img');
-        if (productImage) {
-            const src = productImage.getAttribute('src');
-            return src ? (src.startsWith('http') ? src : `https://sopharmacy.bg${src}`) : null;
+        // Priority 2: Try Twitter card image
+        const twitterImageMeta = doc.querySelector('meta[name="twitter:image"]');
+        if (twitterImageMeta) {
+            const imageUrl = twitterImageMeta.getAttribute('content');
+            if (imageUrl) {
+                console.log(`✓ Found twitter:image for product ${productId}`);
+                return imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
+            }
         }
         
+        // Priority 3: Find main product image in page
+        const productImage = doc.querySelector('.product-image img, .product-detail__image img, .pdp-image img, .main-image img');
+        if (productImage) {
+            const src = productImage.getAttribute('src') || productImage.getAttribute('data-src');
+            if (src) {
+                console.log(`✓ Found product image in page for product ${productId}`);
+                return src.startsWith('http') ? src : `https://sopharmacy.bg${src}`;
+            }
+        }
+        
+        console.warn(`✗ No image found for product ${productId}`);
         return null;
         
     } catch (error) {
-        console.warn(`Failed to extract image for product ${productId}:`, error);
+        console.error(`✗ Failed to extract image for product ${productId}:`, error.message);
         return null;
     }
 }
