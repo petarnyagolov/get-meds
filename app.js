@@ -216,9 +216,16 @@ function extractSopharmacyProductIds(html) {
                 const nameElement = item.querySelector('.products-item__name, .product-name, h3, h4');
                 const name = nameElement ? nameElement.textContent.trim() : 'Неизвестен продукт';
                 
-                // Extract image if available
+                // Extract image if available (try multiple selectors)
                 const imgElement = item.querySelector('img');
-                const imageUrl = imgElement ? imgElement.getAttribute('src') : null;
+                let imageUrl = null;
+                if (imgElement) {
+                    const src = imgElement.getAttribute('src') || imgElement.getAttribute('data-src');
+                    if (src) {
+                        // Make sure URL is absolute
+                        imageUrl = src.startsWith('http') ? src : `https://sopharmacy.bg${src}`;
+                    }
+                }
                 
                 // Extract price if available
                 const priceElement = item.querySelector('.price, .products-item__price');
@@ -237,6 +244,51 @@ function extractSopharmacyProductIds(html) {
     });
     
     return products;
+}
+
+// Extract product image from SOpharmacy product page
+async function extractProductImage(productId) {
+    try {
+        const productUrl = `https://sopharmacy.bg/bg/product/${productId}`;
+        
+        // Use CORS proxy if enabled
+        const fetchUrl = CONFIG.USE_CORS_PROXY 
+            ? `${CONFIG.CORS_PROXY}?pharmacy=sopharmacy&url=${encodeURIComponent(productUrl)}`
+            : productUrl;
+        
+        const response = await fetch(fetchUrl);
+        
+        if (!response.ok) {
+            return null;
+        }
+        
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Try to extract og:image meta tag
+        const ogImageMeta = doc.querySelector('meta[property="og:image"]');
+        if (ogImageMeta) {
+            const imageUrl = ogImageMeta.getAttribute('content');
+            if (imageUrl) {
+                // Make sure URL is absolute
+                return imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
+            }
+        }
+        
+        // Fallback: try to find product image in page
+        const productImage = doc.querySelector('.product-image img, .product-detail__image img, .pdp-image img');
+        if (productImage) {
+            const src = productImage.getAttribute('src');
+            return src ? (src.startsWith('http') ? src : `https://sopharmacy.bg${src}`) : null;
+        }
+        
+        return null;
+        
+    } catch (error) {
+        console.warn(`Failed to extract image for product ${productId}:`, error);
+        return null;
+    }
 }
 
 // Get availability for a specific SOpharmacy product
@@ -265,6 +317,12 @@ async function getSopharmacyAvailability(productInfo) {
             return null;
         }
         
+        // If no image from search, try to get og:image from product page
+        let imageUrl = productInfo.imageUrl;
+        if (!imageUrl) {
+            imageUrl = await extractProductImage(productInfo.id);
+        }
+        
         // Convert to our standard format
         const results = features.map(feature => {
             const props = feature.properties;
@@ -276,7 +334,7 @@ async function getSopharmacyAvailability(productInfo) {
                     manufacturer: 'SOpharmacy',
                     packaging: '',
                     prescription: false,
-                    imageUrl: productInfo.imageUrl,
+                    imageUrl: imageUrl, // Use the enhanced image URL (og:image from product page if available)
                     productLink: productInfo.link
                 },
                 pharmacy: {
