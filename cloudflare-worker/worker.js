@@ -121,10 +121,10 @@ const cookieString = allCookies.join('; ');
 
 const enrichedProducts = [];
     
-    if (searchData.html) {
+    if (data.html) {
       // Parse HTML to extract product URLs
       const productUrlRegex = /href="\/pharmacy\/([\w-]+)"/g;
-      const matches = [...searchData.html.matchAll(productUrlRegex)];
+      const matches = [...data.html.matchAll(productUrlRegex)];
       
       // Process up to 10 products (to avoid timeout)
       const maxProducts = Math.min(matches.length, 10);
