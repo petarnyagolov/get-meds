@@ -69,27 +69,28 @@ async function handleVMClub(query, corsHeaders) {
 
     // STEP 1: Get fresh session from homepage
     const homePage = await fetch("https://sofia.vmclub.bg/", {
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'bg-BG,bg;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none'
-  }
-});
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'bg-BG,bg;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none'
+      }
+    });
 
     const html = await homePage.text();
-const setCookieHeaders = homePage.headers.get("set-cookie");
-let allCookies = [];
-if (setCookieHeaders) {
-  const cookieParts = setCookieHeaders.split(',').map(c => c.trim());
-  allCookies = cookieParts.map(cookie => cookie.split(';')[0]).filter(c => c);
-}
-const cookieString = allCookies.join('; ');
+    const setCookieHeaders = homePage.headers.get("set-cookie");
+    let allCookies = [];
+    if (setCookieHeaders) {
+      const cookieParts = setCookieHeaders.split(',').map(c => c.trim());
+      allCookies = cookieParts.map(cookie => cookie.split(';')[0]).filter(c => c);
+    }
+    const cookieString = allCookies.join('; ');
+    
     // Extract CSRF token from HTML
     const csrfToken = html.match(/name="csrf-token" content="([^"]+)"/)?.[1];
 
@@ -99,32 +100,35 @@ const cookieString = allCookies.join('; ');
 
     // STEP 2: Make search request with CSRF token
     const searchResponse = await fetch("https://sofia.vmclub.bg/products/fast-search", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-    "X-CSRF-TOKEN": csrfToken,
-    "X-Requested-With": "XMLHttpRequest",
-    "Cookie": cookieString,  // Използвай новия cookieString
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "Accept-Language": "bg-BG,bg;q=0.9,en;q=0.8",
-    "Origin": "https://sofia.vmclub.bg",
-    "Referer": "https://sofia.vmclub.bg/",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-origin"
-  },
-  body: `q=${encodeURIComponent(query)}&field=fast-search`
-});
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-CSRF-TOKEN": csrfToken,
+        "X-Requested-With": "XMLHttpRequest",
+        "Cookie": cookieString,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "bg-BG,bg;q=0.9,en;q=0.8",
+        "Origin": "https://sofia.vmclub.bg",
+        "Referer": "https://sofia.vmclub.bg/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin"
+      },
+      body: `q=${encodeURIComponent(query)}&field=fast-search`
+    });
 
     const data = await searchResponse.json();
+    console.log('VMClub search response:', { hasHtml: !!data.html, htmlLength: data.html?.length });
 
-const enrichedProducts = [];
+    const enrichedProducts = [];
     
+    // STEP 3: Extract product URLs from search results and enrich with details
     if (data.html) {
-      // Parse HTML to extract product URLs
+      // Parse HTML to extract product URLs (e.g., "/pharmacy/driptan-tabl-5mg-h-60br")
       const productUrlRegex = /href="\/pharmacy\/([\w-]+)"/g;
       const matches = [...data.html.matchAll(productUrlRegex)];
+      console.log(`VMClub found ${matches.length} product URLs`);
       
       // Process up to 10 products (to avoid timeout)
       const maxProducts = Math.min(matches.length, 10);
@@ -132,9 +136,10 @@ const enrichedProducts = [];
       for (let i = 0; i < maxProducts; i++) {
         const productSlug = matches[i][1];
         const productUrl = `https://sofia.vmclub.bg/pharmacy/${productSlug}`;
+        console.log(`Processing product ${i+1}/${maxProducts}: ${productSlug}`);
         
         try {
-          // Fetch product page
+          // STEP 3.1: Fetch product page to get JSON-LD data
           const productPage = await fetch(productUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -145,14 +150,14 @@ const enrichedProducts = [];
           
           const productHtml = await productPage.text();
           
-          // Extract JSON-LD data
+          // STEP 3.2: Extract JSON-LD data (contains productID, price, brand, etc.)
           const jsonLdMatch = productHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
           
           if (jsonLdMatch) {
             const jsonLd = JSON.parse(jsonLdMatch[1]);
             const productID = jsonLd.productID;
             
-            // Fetch store availability
+            // STEP 3.3: Fetch store availability using productID
             const availabilityUrl = `https://sofia.vmclub.bg/store-locations?check=${productID}`;
             const availabilityResponse = await fetch(availabilityUrl, {
               headers: {
@@ -163,7 +168,7 @@ const enrichedProducts = [];
             
             const availabilityHtml = await availabilityResponse.text();
             
-            // Parse availability HTML to extract locations
+            // STEP 3.4: Parse availability HTML to extract locations from data-text attributes
             const locationRegex = /data-text='({[^']+})'/g;
             const locations = [];
             let locationMatch;
@@ -187,7 +192,7 @@ const enrichedProducts = [];
               }
             }
             
-            // Add enriched product
+            // Add enriched product with all data
             enrichedProducts.push({
               productID: productID,
               name: jsonLd.name,
@@ -202,6 +207,7 @@ const enrichedProducts = [];
               slug: productSlug,
               locations: locations
             });
+            console.log(`✓ Product ${productSlug}: ${jsonLd.name}, ${locations.length} locations`);
           }
           
         } catch (err) {
@@ -212,6 +218,7 @@ const enrichedProducts = [];
     }
 
     // Return enriched data
+    console.log(`VMClub returning ${enrichedProducts.length} enriched products`);
     return new Response(JSON.stringify({
       success: true,
       query: query,
@@ -224,13 +231,14 @@ const enrichedProducts = [];
   } catch (err) {
     return new Response(JSON.stringify({ 
       error: 'VMClub fetch failed',
-      message: err.message 
+      message: err.message,
+      stack: err.stack
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
-}
+} 
 
 /**
  * Handle SOpharmacy requests

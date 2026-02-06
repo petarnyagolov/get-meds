@@ -101,6 +101,7 @@ async function searchMedicines(query) {
     // In production, this would call real pharmacy APIs through the CORS proxy
     
     const enabledPharmacies = CONFIG.PHARMACIES.filter(p => p.enabled);
+    console.log('🔍 Enabled pharmacies:', enabledPharmacies.map(p => p.name));
     
     if (enabledPharmacies.length === 0) {
         // Return demo data if no real APIs are configured
@@ -129,6 +130,7 @@ async function searchMedicines(query) {
 
 // Search a specific pharmacy
 async function searchPharmacy(pharmacy, query) {
+    console.log(`🏥 Searching ${pharmacy.name} for "${query}"`);
     if (pharmacy.name === 'Sopharmacy') {
         return await searchSopharmacy(query);
     } else if (pharmacy.name === 'VMClub') {
@@ -425,6 +427,7 @@ async function getSopharmacyAvailability(productInfo) {
 // Search VMClub specifically
 async function searchVMClub(query) {
     try {
+        console.log('🔵 VMClub search starting for:', query);
         // VMClub requires CORS proxy due to CSRF token requirement
         if (!CONFIG.USE_CORS_PROXY) {
             console.warn('VMClub requires CORS proxy to be enabled. Set USE_CORS_PROXY: true');
@@ -432,14 +435,17 @@ async function searchVMClub(query) {
         }
 
         const fetchUrl = `${CONFIG.CORS_PROXY}?pharmacy=vmclub&q=${encodeURIComponent(query)}`;
+        console.log('🔵 VMClub fetch URL:', fetchUrl);
         
         const response = await fetch(fetchUrl);
+        console.log('🔵 VMClub response status:', response.status);
         
         if (!response.ok) {
             throw new Error(`VMClub search failed: ${response.status}`);
         }
         
         const data = await response.json();
+        console.log('🔵 VMClub data received:', data);
         
         // Parse VMClub response
         return parseVMClubResponse(data, query);
