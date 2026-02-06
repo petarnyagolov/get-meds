@@ -159,40 +159,88 @@ async function handleVMClub(query, corsHeaders) {
             const jsonLd = JSON.parse(jsonLdText);
             console.log('JSON-LD parsed name:', jsonLd.name);
             
-            // STEP 3.3: Fetch store availability using productID from search results
+            // STEP 3.3: Fetch store availability HTML from store-locations endpoint
             const availabilityUrl = `https://sofia.vmclub.bg/store-locations?check=${productID}`;
+            console.log(`Fetching store locations from: ${availabilityUrl}`);
+            
             const availabilityResponse = await fetch(availabilityUrl, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html',
                 'Cookie': cookieString
               }
             });
             
+            if (!availabilityResponse.ok) {
+              console.error(`Store locations fetch failed: ${availabilityResponse.status}`);
+              throw new Error(`Store locations returned ${availabilityResponse.status}`);
+            }
+            
+            // STEP 3.4: Parse HTML to extract location data from data-text attributes
             const availabilityHtml = await availabilityResponse.text();
+            console.log(`✓ Store locations HTML received: ${availabilityHtml.length} bytes`);
             
-            // STEP 3.4: Parse availability HTML to extract locations from data-text attributes
-            const locationRegex = /data-text='({[^']+})'/g;
             const locations = [];
-            let locationMatch;
+            let processed = 0;
+            let added = 0;
+            let unavailable = 0;
+            let parseErrors = 0;
             
+            // Use regex to find all data-text attributes containing location JSON
+            const locationRegex = /data-text='([^']*)'/g;
+            let locationMatch;
+            const allMatches = [];
+            
+            // First, collect all matches
             while ((locationMatch = locationRegex.exec(availabilityHtml)) !== null) {
+              allMatches.push(locationMatch[1]);
+            }
+            
+            console.log(`✓ Found ${allMatches.length} data-text attributes in HTML`);
+            
+            // Now process each match
+            allMatches.forEach((matchedJson, idx) => {
               try {
-                const locationData = JSON.parse(locationMatch[1].replace(/\\/g, ''));
+                processed++;
+                
+                // Extract and unescape the JSON string
+                const jsonString = matchedJson
+                  .replace(/\\"/g, '"')
+                  .replace(/\\\\u/g, '\\u');
+                
+                const locationData = JSON.parse(jsonString);
+                
+                // Debug: Log first 3 and last 3
+                if (processed <= 3 || processed > allMatches.length - 3) {
+                  console.log(`  [${processed}/${allMatches.length}] ${locationData.city} - ${locationData.name} (status=${locationData.status})`);
+                }
+                
+                // Add ALL locations (both available and unavailable)
                 locations.push({
                   id: locationData.id,
                   name: locationData.name,
                   address: locationData.address,
                   city: locationData.city,
-                  email: locationData.email,
-                  phone: locationData.phone,
+                  email: locationData.email || '',
+                  phone: locationData.phone || '',
                   lat: locationData.lat,
                   lon: locationData.lon,
-                  status: locationData.status // 0=available, 1=unavailable
+                  status: locationData.status
                 });
-              } catch (e) {
-                // Skip invalid JSON
+                
+                // Track counts
+                if (locationData.status == 0) {
+                  added++;
+                } else {
+                  unavailable++;
+                }
+              } catch (parseError) {
+                parseErrors++;
+                console.error(`  ✗ Parse error at [${processed}/${allMatches.length}]:`, parseError.message.substring(0, 100));
               }
-            }
+            });
+            
+            console.log(`✓ Summary: ${processed} total, ${added} available, ${unavailable} unavailable, ${parseErrors} errors`);
             
             // Add enriched product with all data
             enrichedProducts.push({

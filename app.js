@@ -768,10 +768,6 @@ function createPharmacyCard(result) {
                             <span class="detail-label">Опаковка:</span>
                             <span>${medicine.packaging}</span>
                         </div>` : ''}
-                        <div class="detail-row">
-                            <span class="detail-label">Наличност:</span>
-                            <span class="stock-info ${availability}">${stockInfo}</span>
-                        </div>
                     </div>
                 </div>
             </div>
