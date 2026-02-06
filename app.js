@@ -544,19 +544,22 @@ function generateDemoData(query) {
             name: 'Аптека Sopharmacy',
             address: 'бул. Витоша 15, София',
             phone: '02 123 4567',
-            workingHours: 'Пон-Пет: 8:00-20:00, Съб: 9:00-18:00'
+            workingHours: 'Пон-Пет: 8:00-20:00, Съб: 9:00-18:00',
+            city: 'София'
         },
         {
             name: 'Аптека Remedium',
             address: 'ул. Граф Игнатиев 32, София',
             phone: '02 234 5678',
-            workingHours: 'Пон-Нед: 8:00-22:00'
+            workingHours: 'Пон-Нед: 8:00-22:00',
+            city: 'София'
         },
         {
             name: 'Аптека Субра',
             address: 'бул. Христо Ботев 48, София',
             phone: '02 345 6789',
-            workingHours: 'Пон-Пет: 8:30-19:00'
+            workingHours: 'Пон-Пет: 8:30-19:00',
+            city: 'София'
         }
     ];
     
@@ -618,9 +621,22 @@ function displayResults(results, query) {
     }
     
     // Extract unique cities and populate filter
-    const cities = [...new Set(results.map(r => r.pharmacy.city))].sort((a, b) => 
-        a.localeCompare(b, 'bg')
-    );
+    const cities = [...new Set(results
+        .map(r => r.pharmacy?.city)
+        .filter(city => city) // Remove undefined/null cities
+    )].sort((a, b) => a.localeCompare(b, 'bg'));
+    
+    console.log('Cities found:', cities);
+    
+    // Only show filters if there are cities
+    if (cities.length === 0) {
+        console.warn('No cities found in results');
+        hideFilters();
+        const resultsHTML = results.map(result => createPharmacyCard(result)).join('');
+        resultsElement.innerHTML = resultsHTML;
+        resultsElement.classList.remove('hidden');
+        return;
+    }
     
     cityFilterElement.innerHTML = '<option value="all">Всички градове</option>';
     cities.forEach(city => {
@@ -788,3 +804,10 @@ console.log('✅ SOpharmacy - Full integration (20+ locations)');
 console.log('✅ VMClub - Full integration (Sofia)');
 console.log('⚠️ IMPORTANT: Set USE_CORS_PROXY: true for production!');
 console.log('📚 Documentation: See docs/ folder for integration details');
+
+// Check if filter elements exist
+if (!cityFilterElement || !filtersElement || !resultsCountElement) {
+    console.error('⚠️ Filter elements not found in DOM. Please refresh the page.');
+} else {
+    console.log('✓ Filter elements loaded successfully');
+}
