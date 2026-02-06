@@ -34,9 +34,14 @@ const loadingElement = document.getElementById('loading');
 const errorElement = document.getElementById('error');
 const resultsElement = document.getElementById('results');
 const suggestionsElement = document.getElementById('suggestions');
+const filtersElement = document.getElementById('filters');
+const cityFilterElement = document.getElementById('cityFilter');
+const resultsCountElement = document.getElementById('resultsCount');
 
 // State
 let searchTimeout = null;
+let allResults = []; // Store all results for filtering
+let currentQuery = '';
 
 // Event Listeners
 medicineSearchInput.addEventListener('input', handleSearchInput);
@@ -46,6 +51,7 @@ medicineSearchInput.addEventListener('keypress', (e) => {
     }
 });
 searchButton.addEventListener('click', performSearch);
+cityFilterElement.addEventListener('change', applyFilters);
 
 // Handle search input with debouncing
 function handleSearchInput(e) {
@@ -594,7 +600,12 @@ function generateDemoData(query) {
 
 // Display search results
 function displayResults(results, query) {
+    // Store results globally for filtering
+    allResults = results;
+    currentQuery = query;
+    
     if (results.length === 0) {
+        hideFilters();
         resultsElement.innerHTML = `
             <div class="no-results">
                 <h3>Няма намерени резултати</h3>
@@ -606,9 +617,63 @@ function displayResults(results, query) {
         return;
     }
     
-    const resultsHTML = results.map(result => createPharmacyCard(result)).join('');
-    resultsElement.innerHTML = resultsHTML;
+    // Extract unique cities and populate filter
+    const cities = [...new Set(results.map(r => r.pharmacy.city))].sort((a, b) => 
+        a.localeCompare(b, 'bg')
+    );
+    
+    cityFilterElement.innerHTML = '<option value="all">Всички градове</option>';
+    cities.forEach(city => {
+        const option = document.createElement('option');
+        option.value = city;
+        option.textContent = city;
+        cityFilterElement.appendChild(option);
+    });
+    
+    // Show filters
+    showFilters();
+    
+    // Display all results initially
+    applyFilters();
+}
+
+// Apply filters to results
+function applyFilters() {
+    const selectedCity = cityFilterElement.value;
+    
+    let filteredResults = allResults;
+    
+    // Filter by city
+    if (selectedCity !== 'all') {
+        filteredResults = allResults.filter(r => r.pharmacy.city === selectedCity);
+    }
+    
+    // Update results count
+    updateResultsCount(filteredResults.length, allResults.length);
+    
+    // Display filtered results
+    if (filteredResults.length === 0) {
+        resultsElement.innerHTML = `
+            <div class="no-results">
+                <h3>Няма резултати с избраните филтри</h3>
+                <p>Промнете филтрите или направете ново търсене.</p>
+            </div>
+        `;
+    } else {
+        const resultsHTML = filteredResults.map(result => createPharmacyCard(result)).join('');
+        resultsElement.innerHTML = resultsHTML;
+    }
+    
     resultsElement.classList.remove('hidden');
+}
+
+// Update results count display
+function updateResultsCount(filtered, total) {
+    if (filtered === total) {
+        resultsCountElement.textContent = `${total} ${total === 1 ? 'резултат' : 'резултата'}`;
+    } else {
+        resultsCountElement.textContent = `${filtered} от ${total} ${total === 1 ? 'резултат' : 'резултата'}`;
+    }
 }
 
 // Create a pharmacy card HTML
@@ -696,6 +761,8 @@ function hideError() {
 function hideResults() {
     resultsElement.classList.add('hidden');
     resultsElement.innerHTML = '';
+    hideFilters();
+    allResults = [];
 }
 
 function showSuggestions() {
@@ -704,6 +771,14 @@ function showSuggestions() {
 
 function hideSuggestions() {
     suggestionsElement.classList.remove('show');
+}
+
+function showFilters() {
+    filtersElement.classList.remove('hidden');
+}
+
+function hideFilters() {
+    filtersElement.classList.add('hidden');
 }
 
 // Initialize app
