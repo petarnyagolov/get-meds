@@ -76,15 +76,55 @@ const CONFIG = {
 
 Тествай worker-а:
 
+### SOpharmacy Test
 ```bash
-curl "https://get-meds-cors-proxy.your-subdomain.workers.dev?url=https://example.com"
+curl "https://your-worker.workers.dev?pharmacy=sopharmacy&url=https%3A%2F%2Fsopharmacy.bg%2Fbg%2FsophSearch%2F%3Ftext%3Dаспирин"
 ```
+
+### VMClub Test
+```bash
+curl "https://your-worker.workers.dev?pharmacy=vmclub&q=аспирин"
+```
+
+### Generic Proxy Test
+```bash
+curl "https://your-worker.workers.dev?url=https%3A%2F%2Fsopharmacy.bg"
+```
+
+## API Usage
+
+Worker-ът поддържа три начина на работа:
+
+### 1. SOpharmacy Handler
+```
+?pharmacy=sopharmacy&url={encoded_url}
+```
+- Проксира заявки към sopharmacy.bg
+- Добавя правилни browser headers
+- Връща HTML или JSON
+
+### 2. VMClub Handler
+```
+?pharmacy=vmclub&q={search_query}
+```
+- Автоматично взима CSRF token
+- Създава валидна сесия
+- Прави POST заявка с правилни headers
+
+### 3. Generic Proxy
+```
+?url={encoded_url}
+```
+- Универсален proxy за whitelist домейни
+- Проста GET заявка с CORS headers
+
+**Детайлна документация:** Виж [API_USAGE.md](API_USAGE.md)
 
 ## Configuration
 
 ### Добавяне на нов allowed domain
 
-Редактирай `worker.js` и добави domain в `allowedDomains` array:
+Редактирай `worker.js` и добави domain в `allowedDomains` array в `handleGenericProxy` функцията:
 
 ```javascript
 const allowedDomains = [
