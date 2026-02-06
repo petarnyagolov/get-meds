@@ -190,10 +190,41 @@ async function getSopharmacyAvailability(productInfo) {
 
 ## Ограничения
 
-⚠️ **CORS** - SOpharmacy не поддържа CORS, затова може да е нужен CORS proxy в production  
+⚠️ **CORS** - SOpharmacy не поддържа CORS headers изисква се Cloudflare Worker proxy в production  
 ⚠️ **Rate Limiting** - Трябва да се внимава за ограничения на заявките  
 ⚠️ **HTML Parsing** - Зависимост от HTML структурата (може да се промени)  
 ⚠️ **Performance** - Две заявки за всеки продукт (търсене + наличност)  
+
+### CORS Решение
+
+Cloudflare Worker е вече конфигуриран да обработва SOpharmacy:
+
+1. **Deploy Worker** (виж [cloudflare-worker/README.md](../cloudflare-worker/README.md))
+2. **Конфигурирай в app.js:**
+   ```javascript
+   const CONFIG = {
+       CORS_PROXY: 'https://your-worker.workers.dev',
+       USE_CORS_PROXY: true // Задай true в production
+   };
+   ```
+
+3. **Worker автоматично:**
+   - Добавя правилни User-Agent и headers
+   - Задава Referer към sopharmacy.bg
+   - Връща response с CORS headers
+   - Поддържа HTML и JSON content types
+
+**API формат:**
+```
+GET https://your-worker.workers.dev?pharmacy=sopharmacy&url={encoded_url}
+```
+
+**Пример:**
+```javascript
+const searchUrl = 'https://sopharmacy.bg/bg/sophSearch/?text=дриптан';
+const workerUrl = `${CONFIG.CORS_PROXY}?pharmacy=sopharmacy&url=${encodeURIComponent(searchUrl)}`;
+const response = await fetch(workerUrl);
+```  
 
 ## Конфигурация
 

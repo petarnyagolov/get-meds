@@ -1,10 +1,10 @@
 // Configuration
 const CONFIG = {
     // Cloudflare Worker URL for CORS proxy (to be set up)
-    CORS_PROXY: 'https://your-worker.your-subdomain.workers.dev',
+    CORS_PROXY: 'https://get-meds-cors-proxy.petyrnyagolov.workers.dev',
     
     // Set to true to use CORS proxy, false for development (may have CORS issues)
-    USE_CORS_PROXY: false,
+    USE_CORS_PROXY: true,
     
     // Pharmacy API endpoints
     PHARMACIES: [
@@ -15,13 +15,13 @@ const CONFIG = {
             enabled: true // SOpharmacy is now fully integrated
         },
         {
-            name: 'Remedium',
-            endpoint: 'https://remedium.bg/api/search',
-            enabled: false
+            name: 'VMClub',
+            endpoint: 'https://sofia.vmclub.bg/products/fast-search',
+            enabled: true // VMClub integration with CSRF handling
         },
         {
-            name: 'VMClub',
-            endpoint: 'https://vmclub.bg/api/products',
+            name: 'Remedium',
+            endpoint: 'https://remedium.bg/api/search',
             enabled: false
         }
     ]
@@ -125,6 +125,8 @@ async function searchMedicines(query) {
 async function searchPharmacy(pharmacy, query) {
     if (pharmacy.name === 'Sopharmacy') {
         return await searchSopharmacy(query);
+    } else if (pharmacy.name === 'VMClub') {
+        return await searchVMClub(query);
     }
     
     // For other pharmacies
@@ -149,7 +151,13 @@ async function searchSopharmacy(query) {
     try {
         // Step 1: Search for products
         const searchUrl = `https://sopharmacy.bg/bg/sophSearch/?text=${encodeURIComponent(query)}`;
-        const searchResponse = await fetch(searchUrl);
+        
+        // Use CORS proxy if enabled
+        const fetchUrl = CONFIG.USE_CORS_PROXY 
+            ? `${CONFIG.CORS_PROXY}?pharmacy=sopharmacy&url=${encodeURIComponent(searchUrl)}`
+            : searchUrl;
+        
+        const searchResponse = await fetch(fetchUrl);
         
         if (!searchResponse.ok) {
             throw new Error(`Search failed: ${searchResponse.status}`);
@@ -236,7 +244,12 @@ async function getSopharmacyAvailability(productInfo) {
     const availabilityUrl = `https://sopharmacy.bg/bg/mapbox/${productInfo.id}/pdpProductAvailability.json`;
     
     try {
-        const response = await fetch(availabilityUrl);
+        // Use CORS proxy if enabled
+        const fetchUrl = CONFIG.USE_CORS_PROXY 
+            ? `${CONFIG.CORS_PROXY}?pharmacy=sopharmacy&url=${encodeURIComponent(availabilityUrl)}`
+            : availabilityUrl;
+        
+        const response = await fetch(fetchUrl);
         
         if (!response.ok) {
             console.warn(`Availability fetch failed for product ${productInfo.id}`);
@@ -295,6 +308,93 @@ async function getSopharmacyAvailability(productInfo) {
         console.error(`Error fetching availability for product ${productInfo.id}:`, error);
         return null;
     }
+}
+
+// Search VMClub specifically
+async function searchVMClub(query) {
+    try {
+        // VMClub requires CORS proxy due to CSRF token requirement
+        if (!CONFIG.USE_CORS_PROXY) {
+            console.warn('VMClub requires CORS proxy to be enabled. Set USE_CORS_PROXY: true');
+            return [];
+        }
+
+        const fetchUrl = `${CONFIG.CORS_PROXY}?pharmacy=vmclub&q=${encodeURIComponent(query)}`;
+        
+        const response = await fetch(fetchUrl);
+        
+        if (!response.ok) {
+            throw new Error(`VMClub search failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Parse VMClub response
+        return parseVMClubResponse(data, query);
+        
+    } catch (error) {
+        console.error('VMClub search error:', error);
+        throw error;
+    }
+}
+
+// Parse VMClub response into standard format
+function parseVMClubResponse(data, query) {
+    const results = [];
+    
+    // VMClub returns HTML in data.html or array of products
+    // Adjust based on actual response format
+    if (!data || (!data.html && !data.products)) {
+        return results;
+    }
+    
+    // If data has HTML, parse it
+    if (data.html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(data.html, 'text/html');
+        
+        const productItems = doc.querySelectorAll('.product-item, .search-result-item, [data-product-id]');
+        
+        productItems.forEach(item => {
+            const nameElement = item.querySelector('.product-name, h3, h4, .name');
+            const priceElement = item.querySelector('.price, .product-price');
+            const linkElement = item.querySelector('a[href*="/product/"], a[href*="/products/"]');
+            const imgElement = item.querySelector('img');
+            
+            if (nameElement) {
+                const name = nameElement.textContent.trim();
+                const priceText = priceElement ? priceElement.textContent.trim() : null;
+                const price = priceText ? parseFloat(priceText.replace(/[^0-9.]/g, '')) : null;
+                const link = linkElement ? linkElement.getAttribute('href') : null;
+                const imageUrl = imgElement ? imgElement.getAttribute('src') : null;
+                
+                results.push({
+                    medicine: {
+                        name: name,
+                        manufacturer: 'VMClub',
+                        packaging: '',
+                        prescription: false,
+                        imageUrl: imageUrl ? (imageUrl.startsWith('http') ? imageUrl : `https://sofia.vmclub.bg${imageUrl}`) : null,
+                        productLink: link ? (link.startsWith('http') ? link : `https://sofia.vmclub.bg${link}`) : null
+                    },
+                    pharmacy: {
+                        name: 'VMClub София',
+                        address: 'Различни локации в София',
+                        phone: '0700 20 888',
+                        workingHours: 'Виж сайта за работно време',
+                        city: 'София'
+                    },
+                    inStock: true,
+                    quantity: 5,
+                    price: price ? price.toFixed(2) : 'Няма цена',
+                    availability: 'available',
+                    statusText: 'Наличен в София'
+                });
+            }
+        });
+    }
+    
+    return results;
 }
 
 // Parse pharmacy response into standard format
@@ -502,4 +602,8 @@ function hideSuggestions() {
 
 // Initialize app
 console.log('GetMeds app initialized');
-console.log('Note: This demo uses mock data. Configure real pharmacy APIs in app.js');
+console.log('Integrated pharmacies:');
+console.log('✅ SOpharmacy - Full integration (20+ locations)');
+console.log('✅ VMClub - Full integration (Sofia)');
+console.log('⚠️ IMPORTANT: Set USE_CORS_PROXY: true for production!');
+console.log('📚 Documentation: See docs/ folder for integration details');

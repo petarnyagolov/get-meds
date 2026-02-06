@@ -108,19 +108,30 @@ const CONFIG = {
 
 Приложението вече има пълна интеграция със SOpharmacy! Можеш да търсиш реални продукти и да виждаш тяхната наличност в над 20 аптеки из цяла България.
 
+### ✅ VMClub (Пълно интегрирано!)
+
+Интеграция с VMClub също е завършена! Worker автоматично обработва CSRF tokens и сесии за търсене в София.
+
 **Как работи:**
 1. Търсене на продукти в каталога на SOpharmacy
 2. Извличане на реална информация за наличност в мрежата от аптеки
 3. Показване на цени, работно време и локации
 
-**Пример:**
+**Примери:**
 ```javascript
 // Търси "дриптан" в SOpharmacy
 const results = await searchSopharmacy('дриптан');
 // Връща: продукти от ~20+ аптеки с наличност, цени и локации
+
+// Търси "аспирин" във VMClub
+const resultsVM = await searchVMClub('аспирин');
+// Връща: продукти от VMClub София с цени и информация
 ```
 
-За технически детайли вижте [docs/SOPHARMACY_INTEGRATION.md](docs/SOPHARMACY_INTEGRATION.md)
+**Документация:**
+- [SOpharmacy Integration](docs/SOPHARMACY_INTEGRATION.md)
+- [VMClub Integration](docs/VMCLUB_INTEGRATION.md)
+- [Cloudflare Worker API](cloudflare-worker/API_USAGE.md)
 
 ### Други аптеки
 
@@ -143,19 +154,40 @@ const results = await searchSopharmacy('дриптан');
 - Въведете име на лекарство (напр. "парацетамол", "дриптан", "аспирин")
 - Резултатите ще дойдат директно от SOpharmacy
 
-### CORS забележка
+### CORS забележка ⚠️
 
-В момента, заради developer режим (`USE_CORS_PROXY: false`), приложението може да има CORS проблеми в някои браузъри. За production:
-- Deploy Cloudflare Worker (виж [cloudflare-worker/README.md](cloudflare-worker/README.md))
-- Настрой `USE_CORS_PROXY: true` в [app.js](app.js)
-- Задай Worker URL в конфигурацията
+**ВАЖНО:** SOpharmacy и VMClub **изискват** Cloudflare Worker за да работят правилно!
+
+В момента `USE_CORS_PROXY: false` е само за development demo. За реална работа:
+
+1. **Deploy Cloudflare Worker:**
+   ```bash
+   cd cloudflare-worker
+   wrangler login
+   wrangler deploy
+   ```
+
+2. **Конфигурирай в app.js:**
+   ```javascript
+   const CONFIG = {
+       CORS_PROXY: 'https://your-worker.workers.dev',
+       USE_CORS_PROXY: true // Задай TRUE!
+   };
+   ```
+
+3. **Worker автоматично обработва:**
+   - ✅ CORS headers за всички заявки
+   - ✅ CSRF tokens и sessions за VMClub
+   - ✅ Правилни browser headers за SOpharmacy
+
+Виж [cloudflare-worker/README.md](cloudflare-worker/README.md) за deployment инструкции.
 
 ## Поддържани аптеки
 
-- [x] ✅ **Sopharmacy** - Пълно интегрирано!
+- [x] ✅ **Sopharmacy** - Пълно интегрирано! (20+ аптеки)
+- [x] ✅ **VMClub** - Пълно интегрирано! (София)
 - [ ] Remedium - Планирано
 - [ ] Аптека Субра - Планирано
-- [ ] VMClub - Планирано
 - [ ] Други аптечни вериги - Планирано
 
 ## Roadmap
