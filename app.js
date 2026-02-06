@@ -172,14 +172,26 @@ async function searchSopharmacy(query) {
             return [];
         }
         
-        // Step 3: Get availability for each product (limit to first 5 for performance)
-        const availabilityPromises = productIds.slice(0, 5).map(productInfo => 
+        // Step 3: Enhance product info with og:image (parallel fetch for first 3 products)
+        const enhancedProductsPromises = productIds.slice(0, 3).map(async productInfo => {
+            // Always try to get og:image from product page for better quality
+            const ogImage = await extractProductImage(productInfo.id);
+            return {
+                ...productInfo,
+                imageUrl: ogImage || productInfo.imageUrl // Prioritize og:image
+            };
+        });
+        
+        const enhancedProducts = await Promise.all(enhancedProductsPromises);
+        
+        // Step 4: Get availability for each enhanced product
+        const availabilityPromises = enhancedProducts.map(productInfo => 
             getSopharmacyAvailability(productInfo)
         );
         
         const availabilityResults = await Promise.allSettled(availabilityPromises);
         
-        // Step 4: Combine results
+        // Step 5: Combine results
         const results = [];
         availabilityResults.forEach(result => {
             if (result.status === 'fulfilled' && result.value) {
@@ -202,7 +214,7 @@ function extractSopharmacyProductIds(html) {
     const doc = parser.parseFromString(html, 'text/html');
     
     // Find all product items
-    const productItems = doc.querySelectorAll('.products-item');
+    const productItems = doc.querySelectorAll('.products-item, .product-item, [data-product-id]');
     
     productItems.forEach(item => {
         const link = item.querySelector('a[href*="/bg/product/"]');
@@ -212,16 +224,27 @@ function extractSopharmacyProductIds(html) {
             if (match) {
                 const productId = match[1];
                 
-                // Extract product name
-                const nameElement = item.querySelector('.products-item__name, .product-name, h3, h4');
-                const name = nameElement ? nameElement.textContent.trim() : 'Неизвестен продукт';
+                // Extract product name - try multiple selectors
+                const nameElement = item.querySelector('.products-item__name, .product-name, .product__name, h3, h4, .name, [itemprop="name"]');
+                let name = 'Неизвестен продукт';
+                if (nameElement) {
+                    name = nameElement.textContent.trim();
+                } else {
+                    // Fallback: try to get from link title or aria-label
+                    name = link.getAttribute('title') || link.getAttribute('aria-label') || 'Неизвестен продукт';
+                }
+                
+                console.log(`Found product: ${name} (ID: ${productId})`);
                 
                 // Extract image if available (try multiple selectors)
-                const imgElement = item.querySelector('img');
+                const imgElement = item.querySelector('img, [data-src], picture source');
                 let imageUrl = null;
                 if (imgElement) {
-                    const src = imgElement.getAttribute('src') || imgElement.getAttribute('data-src');
-                    if (src) {
+                    const src = imgElement.getAttribute('src') || 
+                                imgElement.getAttribute('data-src') || 
+                                imgElement.getAttribute('data-lazy-src') ||
+                                imgElement.getAttribute('srcset')?.split(',')[0]?.split(' ')[0];
+                    if (src && !src.includes('placeholder') && !src.includes('loading')) {
                         // Make sure URL is absolute
                         imageUrl = src.startsWith('http') ? src : `https://sopharmacy.bg${src}`;
                     }
@@ -332,11 +355,9 @@ async function getSopharmacyAvailability(productInfo) {
             return null;
         }
         
-        // If no image from search, try to get og:image from product page
-        let imageUrl = productInfo.imageUrl;
-        if (!imageUrl) {
-            imageUrl = await extractProductImage(productInfo.id);
-        }
+        // Use the already enhanced imageUrl (og:image was fetched earlier)
+        const imageUrl = productInfo.imageUrl;
+        console.log(`Product ${productInfo.id} using image: ${imageUrl ? 'Found' : 'None'}`);
         
         // Convert to our standard format
         const results = features.map(feature => {
