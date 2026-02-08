@@ -321,16 +321,14 @@ async function extractProductImage(productId) {
             price: null
         };
         
-        // Extract name from og:title meta tag
-        const ogTitleMeta = doc.querySelector('meta[property="og:title"]');
-        if (ogTitleMeta) {
-            const rawTitle = ogTitleMeta.getAttribute('content');
+        // Extract name from <title> tag
+        const titleElement = doc.querySelector('title');
+        if (titleElement) {
+            const rawTitle = titleElement.textContent.trim();
             if (rawTitle) {
-                // Decode HTML entities (&#1044; → Д)
-                const textarea = document.createElement('textarea');
-                textarea.innerHTML = rawTitle;
-                extractedData.name = textarea.value.trim();
-                console.log(`✓ Found og:title for product ${productId}: ${extractedData.name}`);
+                // Title already contains proper text (no HTML entities to decode)
+                extractedData.name = rawTitle;
+                console.log(`✓ Found title for product ${productId}: ${extractedData.name}`);
             }
         }
         
