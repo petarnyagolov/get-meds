@@ -183,18 +183,23 @@ async function searchSopharmacy(query) {
         
         console.log(`Found ${productIds.length} products, fetching og:images for first 3...`);
         
-        // Step 3: Enhance product info with og:image (parallel fetch for first 3 products)
+        // Step 3: Enhance product info with data from product page (parallel fetch for first 3 products)
         const enhancedProductsPromises = productIds.slice(0, 3).map(async productInfo => {
-            console.log(`→ Fetching og:image for product ${productInfo.id}...`);
+            console.log(`→ Fetching product details for ${productInfo.id}...`);
             try {
-                // Always try to get og:image from product page for better quality
-                const ogImage = await extractProductImage(productInfo.id);
-                return {
-                    ...productInfo,
-                    imageUrl: ogImage || productInfo.imageUrl // Prioritize og:image
-                };
+                // Get name, price, and image from product page
+                const extractedData = await extractProductImage(productInfo.id);
+                if (extractedData) {
+                    return {
+                        ...productInfo,
+                        name: extractedData.name || productInfo.name, // Prioritize og:title
+                        price: extractedData.price !== null ? extractedData.price : productInfo.price, // Prioritize product page price
+                        imageUrl: extractedData.imageUrl || productInfo.imageUrl // Prioritize og:image
+                    };
+                }
+                return productInfo; // Return original if failed
             } catch (error) {
-                console.error(`Failed to fetch og:image for product ${productInfo.id}:`, error);
+                console.error(`Failed to fetch product details for ${productInfo.id}:`, error);
                 return productInfo; // Return original if failed
             }
         });
@@ -289,7 +294,7 @@ function extractSopharmacyProductIds(html) {
     return products;
 }
 
-// Extract product image from SOpharmacy product page
+// Extract product details (name, price, image) from SOpharmacy product page
 async function extractProductImage(productId) {
     try {
         const productUrl = `https://sopharmacy.bg/bg/product/${productId}`;
@@ -310,41 +315,79 @@ async function extractProductImage(productId) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         
+        let extractedData = {
+            imageUrl: null,
+            name: null,
+            price: null
+        };
+        
+        // Extract name from og:title meta tag
+        const ogTitleMeta = doc.querySelector('meta[property="og:title"]');
+        if (ogTitleMeta) {
+            const rawTitle = ogTitleMeta.getAttribute('content');
+            if (rawTitle) {
+                // Decode HTML entities (&#1044; → Д)
+                const textarea = document.createElement('textarea');
+                textarea.innerHTML = rawTitle;
+                extractedData.name = textarea.value.trim();
+                console.log(`✓ Found og:title for product ${productId}: ${extractedData.name}`);
+            }
+        }
+        
+        // Extract price from product-grid
+        const priceElement = doc.querySelector('.product-grid .price--euro span');
+        if (priceElement) {
+            const priceText = priceElement.textContent.trim();
+            // Extract numeric value (e.g., "4,80 €" or "4.80 €")
+            const priceMatch = priceText.match(/([0-9]+[.,][0-9]+)/);
+            if (priceMatch) {
+                extractedData.price = parseFloat(priceMatch[1].replace(',', '.'));
+                console.log(`✓ Found price for product ${productId}: ${extractedData.price} EUR`);
+            }
+        }
+        
         // Priority 1: Try to extract og:image meta tag (best quality)
         const ogImageMeta = doc.querySelector('meta[property="og:image"]');
         if (ogImageMeta) {
             const imageUrl = ogImageMeta.getAttribute('content');
             if (imageUrl) {
-                console.log(`✓ Found og:image for product ${productId}: ${imageUrl}`);
-                return imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
+                extractedData.imageUrl = imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
+                console.log(`✓ Found og:image for product ${productId}`);
             }
         }
         
-        // Priority 2: Try Twitter card image
-        const twitterImageMeta = doc.querySelector('meta[name="twitter:image"]');
-        if (twitterImageMeta) {
-            const imageUrl = twitterImageMeta.getAttribute('content');
-            if (imageUrl) {
-                console.log(`✓ Found twitter:image for product ${productId}`);
-                return imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
+        // Priority 2: Try Twitter card image (if og:image not found)
+        if (!extractedData.imageUrl) {
+            const twitterImageMeta = doc.querySelector('meta[name="twitter:image"]');
+            if (twitterImageMeta) {
+                const imageUrl = twitterImageMeta.getAttribute('content');
+                if (imageUrl) {
+                    extractedData.imageUrl = imageUrl.startsWith('http') ? imageUrl : `https://sopharmacy.bg${imageUrl}`;
+                    console.log(`✓ Found twitter:image for product ${productId}`);
+                }
             }
         }
         
         // Priority 3: Find main product image in page
-        const productImage = doc.querySelector('.product-image img, .product-detail__image img, .pdp-image img, .main-image img');
-        if (productImage) {
-            const src = productImage.getAttribute('src') || productImage.getAttribute('data-src');
-            if (src) {
-                console.log(`✓ Found product image in page for product ${productId}`);
-                return src.startsWith('http') ? src : `https://sopharmacy.bg${src}`;
+        if (!extractedData.imageUrl) {
+            const productImage = doc.querySelector('.product-image img, .product-detail__image img, .pdp-image img, .main-image img');
+            if (productImage) {
+                const src = productImage.getAttribute('src') || productImage.getAttribute('data-src');
+                if (src) {
+                    extractedData.imageUrl = src.startsWith('http') ? src : `https://sopharmacy.bg${src}`;
+                    console.log(`✓ Found product image in page for product ${productId}`);
+                }
             }
         }
         
-        console.warn(`✗ No image found for product ${productId}`);
-        return null;
+        if (!extractedData.imageUrl) {
+            console.warn(`✗ No image found for product ${productId}`);
+        }
+        
+        return extractedData;
         
     } catch (error) {
-        console.error(`✗ Failed to extract image for product ${productId}:`, error.message);
+        console.error(`✗ Failed to extract product details for product ${productId}:`, error.message);
         return null;
     }
 }
@@ -741,7 +784,7 @@ function createPharmacyCard(result) {
     
     // Product link if available
     const productLinkHtml = medicine.productLink ? 
-        `<a href="${medicine.productLink}" target="_blank" class="product-link" rel="noopener noreferrer">Виж в SOpharmacy ↗</a>` : '';
+        `<a href="${medicine.productLink}" target="_blank" class="product-link" rel="noopener noreferrer">Виж в сайта ↗</a>` : '';
     
     return `
         <div class="pharmacy-card">
